@@ -50,3 +50,5 @@ app.*.map.json
 # Secrets (Supabase keys etc.) — never commit
 .env
 .env.*
+*.env
+.flutter-plugins
