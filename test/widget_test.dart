@@ -1,7 +1,11 @@
+import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 
+import 'package:flowbase/core/theme.dart';
 import 'package:flowbase/data/models.dart';
 import 'package:flowbase/main.dart';
+import 'package:flowbase/screens/main_shell.dart';
+import 'package:flowbase/widgets/bottom_nav.dart';
 import 'package:flowbase/state/app_state.dart';
 
 void main() {
@@ -28,4 +32,22 @@ void main() {
     await tester.pumpAndSettle();
     expect(find.text('Get Started'), findsOneWidget);
   });
+  testWidgets('bottom nav keeps its height on a phone screen', (tester) async {
+    _phoneSize(tester);
+    final state = AppState();
+    await tester.pumpWidget(AppScope(
+      state: state,
+      child: MaterialApp(theme: buildTheme(Brightness.light, false), home: const MainShell()),
+    ));
+    await tester.pump(const Duration(seconds: 1));
+    final height = tester.getSize(find.byType(FbBottomNav)).height;
+    expect(height, lessThan(120));
+  });
+}
+
+void _phoneSize(WidgetTester tester) {
+  tester.view.physicalSize = const Size(1320, 2868);
+  tester.view.devicePixelRatio = 3;
+  tester.view.padding = const FakeViewPadding(top: 186, bottom: 102);
+  addTearDown(tester.view.reset);
 }

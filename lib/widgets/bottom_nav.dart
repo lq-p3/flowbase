@@ -67,6 +67,7 @@ class FbBottomNav extends StatelessWidget {
               item(1, Icons.checklist_rounded, Icons.checklist_rounded, t['tasks']),
               Expanded(
                 child: Center(
+                  heightFactor: 1,
                   child: Semantics(
                     button: true,
                     label: t['create'],
