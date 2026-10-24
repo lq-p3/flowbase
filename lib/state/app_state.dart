@@ -186,6 +186,28 @@ class AppState extends ChangeNotifier {
     }
   }
 
+  /// Sends the chat to the AI secretary (Supabase Edge Function `assistant`).
+  /// Returns (reply, error). Reloads the data when the secretary changed tasks.
+  Future<(String?, String?)> askAssistant(List<({bool fromUser, String text})> chat) async {
+    try {
+      final d = kToday;
+      final today = '${d.year}-${d.month.toString().padLeft(2, '0')}-${d.day.toString().padLeft(2, '0')}';
+      final res = await db!.functions.invoke('assistant', body: {
+        'today': today,
+        'lang': lang,
+        'messages': [for (final m in chat) {'role': m.fromUser ? 'user' : 'model', 'text': m.text}],
+      });
+      final data = res.data as Map<String, dynamic>;
+      if (data['changed'] == true) await load();
+      return (data['reply'] as String?, data['error'] as String?);
+    } on FunctionException catch (e) {
+      final details = e.details;
+      return (null, details is Map ? '${details['error'] ?? details}' : '${e.reasonPhrase ?? e.status}');
+    } catch (e) {
+      return (null, '$e');
+    }
+  }
+
   /// Saves a change in the background; shows a message if it fails.
   void _save(Future<void> Function(Repository r) op) {
     _scheduleReminders();

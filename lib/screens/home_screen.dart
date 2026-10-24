@@ -8,6 +8,7 @@ import '../state/app_state.dart';
 import '../widgets/cards.dart';
 import '../widgets/controls.dart';
 import '../widgets/layout.dart';
+import 'assistant_screen.dart';
 import 'profile_screen.dart';
 import 'search_screen.dart';
 import 'space_form_screen.dart';
@@ -59,6 +60,8 @@ class _HomeScreenState extends State<HomeScreen> {
                   ],
                 ),
               ),
+              FbIconButton(icon: Icons.auto_awesome_rounded, label: t['assistant'], bordered: true, onTap: () => push(context, const AssistantScreen())),
+              const SizedBox(width: 8),
               FbIconButton(icon: Icons.search_rounded, label: t['search'], bordered: true, onTap: () => push(context, const SearchScreen())),
               const SizedBox(width: 8),
               Semantics(
