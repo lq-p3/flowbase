@@ -114,7 +114,7 @@ class SettingsScreen extends StatelessWidget {
                   CapsLabel(t['account']),
                   GroupCard(children: [
                     ListRow(icon: Icons.person_outline_rounded, label: t['profileL'], value: app.userName.isEmpty ? t['user'] : app.userName, onTap: () => Navigator.maybePop(context)),
-                    ListRow(icon: Icons.mail_outline_rounded, label: t['emailL'], value: 'alex@example.com', onTap: soon),
+                    ListRow(icon: Icons.mail_outline_rounded, label: t['emailL'], value: app.email, onTap: soon),
                     ListRow(icon: Icons.lock_outline_rounded, label: t['passwordL'], onTap: soon),
                   ]),
                   const SizedBox(height: 22),
