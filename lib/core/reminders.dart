@@ -4,6 +4,7 @@ import 'package:timezone/data/latest.dart' as tzdata;
 import 'package:timezone/timezone.dart' as tz;
 
 import '../data/models.dart' show Task, Project;
+import 'format.dart';
 
 /// Phone notifications scheduled on the device itself (free, no server, works offline).
 ///
@@ -60,6 +61,7 @@ class Reminders {
     if (!_ready) return;
     await _plugin.cancelAll();
     final now = tz.TZDateTime.now(tz.local);
+    final f = Fmt(isAr);
     final jobs = <(tz.TZDateTime, String, String)>[];
 
     // 1. Each task with a time and the reminder switch on: 30 minutes before it starts.
@@ -69,7 +71,7 @@ class Reminders {
         final hm = t.time!.split(':').map(int.parse).toList();
         final at = tz.TZDateTime(tz.local, t.date.year, t.date.month, t.date.day, hm[0], hm[1]).subtract(const Duration(minutes: 30));
         if (at.isAfter(now)) {
-          jobs.add((at, t.title.of(isAr), isAr ? 'تبدأ الساعة ${t.time} (بعد ٣٠ دقيقة)' : 'Starts at ${t.time} (in 30 minutes)'));
+          jobs.add((at, t.title.of(isAr), isAr ? 'تبدأ الساعة ${f.time(t.time)} (بعد ٣٠ دقيقة)' : 'Starts at ${f.time(t.time)} (in 30 minutes)'));
         }
       }
     }
@@ -85,7 +87,7 @@ class Reminders {
         jobs.add((
           at,
           isAr ? 'صباح الخير ☀️' : 'Good morning ☀️',
-          isAr ? 'عندك $open ${open == 1 ? 'مهمة' : 'مهام'} اليوم' : 'You have $open ${open == 1 ? 'task' : 'tasks'} today',
+          isAr ? 'عندك ${f.nTasks(open)} اليوم' : 'You have ${f.nTasks(open)} today',
         ));
       }
       // 3. Project due dates: 9:00 on the due day.
