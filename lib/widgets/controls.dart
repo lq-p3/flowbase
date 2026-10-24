@@ -870,12 +870,15 @@ class Avatar extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final c = context.fb;
+    final app = context.app;
+    final name = app.userName.isEmpty ? app.email : app.userName;
+    final initials = name.isEmpty ? '' : name.split(RegExp(r'\s+')).take(2).map((w) => w.characters.first.toUpperCase()).join();
     return Container(
       width: size,
       height: size,
       alignment: Alignment.center,
       decoration: BoxDecoration(color: filled ? c.primary : c.primaryLight, shape: BoxShape.circle),
-      child: Text('AM',
+      child: Text(initials,
           style: TextStyle(fontSize: size * 0.34, fontWeight: FontWeight.w700, color: filled ? Colors.white : c.primaryText)),
     );
   }

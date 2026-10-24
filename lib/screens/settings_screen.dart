@@ -21,10 +21,15 @@ class SettingsScreen extends StatelessWidget {
     void soon() => showToast(t['comingSoon'], icon: Icons.info_outline_rounded);
     void toStart() => Navigator.of(context).pushAndRemoveUntil(fbRoute(const OnboardingScreen()), (_) => false);
 
+    Future<void> signOut() async {
+      await context.appRead.signOut();
+      toStart();
+    }
+
     Future<void> deleteAccount() async {
       final ok = await showConfirm(context, title: t['dAccT'], message: t['dAccM']);
       if (!ok || !context.mounted) return;
-      context.appRead.resetAll();
+      await context.appRead.deleteAllData();
       toStart();
     }
 
@@ -108,7 +113,7 @@ class SettingsScreen extends StatelessWidget {
                 children: [
                   CapsLabel(t['account']),
                   GroupCard(children: [
-                    ListRow(icon: Icons.person_outline_rounded, label: t['profileL'], value: t['user'], onTap: () => Navigator.maybePop(context)),
+                    ListRow(icon: Icons.person_outline_rounded, label: t['profileL'], value: app.userName.isEmpty ? t['user'] : app.userName, onTap: () => Navigator.maybePop(context)),
                     ListRow(icon: Icons.mail_outline_rounded, label: t['emailL'], value: 'alex@example.com', onTap: soon),
                     ListRow(icon: Icons.lock_outline_rounded, label: t['passwordL'], onTap: soon),
                   ]),
@@ -161,7 +166,7 @@ class SettingsScreen extends StatelessWidget {
                       ),
                   ]),
                   const SizedBox(height: 22),
-                  SecondaryButton(label: t['signOut'], icon: Icons.logout_rounded, onPressed: toStart),
+                  SecondaryButton(label: t['signOut'], icon: Icons.logout_rounded, onPressed: signOut),
                   const SizedBox(height: 22),
                   CapsLabel(t['dangerZone'], color: c.dangerText),
                   Container(

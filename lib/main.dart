@@ -1,16 +1,29 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_localizations/flutter_localizations.dart';
+import 'package:supabase_flutter/supabase_flutter.dart';
 
+import 'core/config.dart';
 import 'core/theme.dart';
+import 'screens/main_shell.dart';
 import 'screens/onboarding_screen.dart';
 import 'state/app_state.dart';
 import 'widgets/overlays.dart';
 
-void main() => runApp(FlowBaseApp(state: AppState()));
+Future<void> main() async {
+  WidgetsFlutterBinding.ensureInitialized();
+  // Connects to Supabase and restores the saved login (if any) from the phone.
+  await Supabase.initialize(url: supabaseUrl, publishableKey: supabasePublishableKey);
+  final state = AppState(db: Supabase.instance.client);
+  if (state.signedIn) state.load();
+  runApp(FlowBaseApp(state: state, startInApp: state.signedIn));
+}
 
 class FlowBaseApp extends StatelessWidget {
-  const FlowBaseApp({super.key, required this.state});
+  const FlowBaseApp({super.key, required this.state, this.startInApp = false});
   final AppState state;
+
+  /// True when the phone already has a saved login at launch.
+  final bool startInApp;
 
   @override
   Widget build(BuildContext context) {
@@ -33,7 +46,8 @@ class FlowBaseApp extends StatelessWidget {
             GlobalCupertinoLocalizations.delegate,
           ],
           builder: (context, child) => DevicePreview(child: child ?? const SizedBox()),
-          home: const OnboardingScreen(),
+          // Already signed in on this phone → straight to the app.
+          home: startInApp ? const MainShell() : const OnboardingScreen(),
         ),
       ),
     );

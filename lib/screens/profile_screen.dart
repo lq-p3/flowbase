@@ -36,9 +36,9 @@ class ProfileScreen extends StatelessWidget {
                     child: Column(children: [
                       const ExcludeSemantics(child: Avatar(size: 76, filled: true)),
                       const SizedBox(height: 12),
-                      Text(t['user'], style: TextStyle(fontSize: 21, fontWeight: FontWeight.w700, letterSpacing: -0.3, color: c.text)),
+                      Text(app.userName.isEmpty ? t['user'] : app.userName, style: TextStyle(fontSize: 21, fontWeight: FontWeight.w700, letterSpacing: -0.3, color: c.text)),
                       const SizedBox(height: 4),
-                      Text('alex@example.com', textDirection: TextDirection.ltr, style: TextStyle(fontSize: 14, color: c.text2)),
+                      Text(app.email, textDirection: TextDirection.ltr, style: TextStyle(fontSize: 14, color: c.text2)),
                       const SizedBox(height: 16),
                       SecondaryButton(label: t['editProfile'], icon: Icons.edit_outlined, height: 40, expand: false, onPressed: settings),
                     ]),

@@ -55,7 +55,7 @@ class _HomeScreenState extends State<HomeScreen> {
                   children: [
                     Text(f.long(kToday), style: TextStyle(fontSize: 13, fontWeight: FontWeight.w500, color: c.text2)),
                     const SizedBox(height: 3),
-                    Semantics(header: true, child: Text(t['greet'], style: FbText.greeting(c.text))),
+                    Semantics(header: true, child: Text(app.userName.isEmpty ? t['greet'] : t['greetName'].replaceAll('{name}', app.userName.split(' ').first), style: FbText.greeting(c.text))),
                   ],
                 ),
               ),

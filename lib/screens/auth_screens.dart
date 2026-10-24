@@ -9,7 +9,7 @@ import 'main_shell.dart';
 
 final _emailRe = RegExp(r'^[^\s@]+@[^\s@]+\.[^\s@]{2,}$');
 
-/// UI only — any valid-looking email and non-empty password "signs in".
+/// Opens the app after a successful sign-in or sign-up.
 void _enterApp(BuildContext context) {
   context.appRead.setTab(0);
   Navigator.of(context).pushAndRemoveUntil(fbRoute(const MainShell()), (_) => false);
@@ -22,10 +22,11 @@ class SignInScreen extends StatefulWidget {
 }
 
 class _SignInScreenState extends State<SignInScreen> {
-  final _email = TextEditingController(text: 'alex@example.com');
-  final _pw = TextEditingController(text: 'flowbase2026');
+  final _email = TextEditingController();
+  final _pw = TextEditingController();
   bool _show = false;
   bool _tried = false;
+  bool _busy = false;
 
   @override
   void dispose() {
@@ -36,9 +37,18 @@ class _SignInScreenState extends State<SignInScreen> {
 
   bool get _emailOk => _emailRe.hasMatch(_email.text.trim());
 
-  void _submit() {
+  Future<void> _submit() async {
+    if (_busy) return;
     if (!_emailOk || _pw.text.isEmpty) {
       setState(() => _tried = true);
+      return;
+    }
+    setState(() => _busy = true);
+    final error = await context.appRead.signIn(_email.text.trim(), _pw.text);
+    if (!mounted) return;
+    setState(() => _busy = false);
+    if (error != null) {
+      showToast(error, icon: Icons.error_outline_rounded);
       return;
     }
     _enterApp(context);
@@ -110,10 +120,10 @@ class _SignInScreenState extends State<SignInScreen> {
                           ),
                           Align(
                             alignment: AlignmentDirectional.centerEnd,
-                            child: FbTextButton(label: t['forgot'], onTap: () => showToast(t['resetSent'], icon: Icons.mail_outline_rounded)),
+                            child: FbTextButton(label: t['forgot'], onTap: () => showToast(t['comingSoon'], icon: Icons.info_outline_rounded)),
                           ),
                           const SizedBox(height: 6),
-                          PrimaryButton(label: t['signIn'], onPressed: _submit),
+                          PrimaryButton(label: _busy ? t['loading'] : t['signIn'], onPressed: _busy ? null : _submit),
                         ],
                       ),
                     ),
@@ -147,6 +157,7 @@ class _SignUpScreenState extends State<SignUpScreen> {
   final _pw2 = TextEditingController();
   bool _show = false;
   bool _submitted = false;
+  bool _busy = false;
 
   @override
   void dispose() {
@@ -164,11 +175,23 @@ class _SignUpScreenState extends State<SignUpScreen> {
   /// Validation appears once a field has content, or after the first submit.
   bool _shown(TextEditingController c) => _submitted || c.text.isNotEmpty;
 
-  void _submit() {
-    if (_nameOk && _emailOk && _pwOk && _matchOk) {
-      _enterApp(context);
-    } else {
+  Future<void> _submit() async {
+    if (_busy) return;
+    if (!(_nameOk && _emailOk && _pwOk && _matchOk)) {
       setState(() => _submitted = true);
+      return;
+    }
+    setState(() => _busy = true);
+    final (error, needsConfirm) = await context.appRead.signUp(_name.text.trim(), _email.text.trim(), _pw.text);
+    if (!mounted) return;
+    setState(() => _busy = false);
+    if (error != null) {
+      showToast(error, icon: Icons.error_outline_rounded);
+    } else if (needsConfirm) {
+      showToast(context.s['confirmEmailSent'], icon: Icons.mail_outline_rounded);
+      replace(context, const SignInScreen());
+    } else {
+      _enterApp(context);
     }
   }
 
@@ -262,7 +285,7 @@ class _SignUpScreenState extends State<SignUpScreen> {
                     suffix: eye(),
                   ),
                   const SizedBox(height: 22),
-                  PrimaryButton(label: t['createAccountBtn'], onPressed: _submit),
+                  PrimaryButton(label: _busy ? t['loading'] : t['createAccountBtn'], onPressed: _busy ? null : _submit),
                   const SizedBox(height: 12),
                 ],
               ),
