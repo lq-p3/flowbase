@@ -3,6 +3,7 @@ import 'package:flutter_localizations/flutter_localizations.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
 import 'core/config.dart';
+import 'core/reminders.dart';
 import 'core/theme.dart';
 import 'screens/main_shell.dart';
 import 'screens/onboarding_screen.dart';
@@ -13,7 +14,14 @@ Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
   // Connects to Supabase and restores the saved login (if any) from the phone.
   await Supabase.initialize(url: supabaseUrl, publishableKey: supabasePublishableKey);
-  final state = AppState(db: Supabase.instance.client);
+  final reminders = Reminders();
+  try {
+    await reminders.init();
+  } catch (_) {
+    // Notifications unavailable: the app still works without them.
+  }
+  final state = AppState(db: Supabase.instance.client, reminders: reminders);
+  await state.loadPrefs();
   if (state.signedIn) state.load();
   runApp(FlowBaseApp(state: state, startInApp: state.signedIn));
 }

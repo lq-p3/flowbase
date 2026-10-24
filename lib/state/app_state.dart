@@ -1,5 +1,10 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
+
+import '../core/reminders.dart';
 
 import '../data/mock_data.dart';
 import '../data/models.dart';
@@ -18,7 +23,7 @@ bool sameDay(DateTime a, DateTime b) => a.year == b.year && a.month == b.month &
 /// and every change is applied here first (so the UI is instant) and then saved.
 /// Without one (tests), it runs on the local mock data.
 class AppState extends ChangeNotifier {
-  AppState({this.db}) : _repo = db == null ? null : Repository(db) {
+  AppState({this.db, this.reminders}) : _repo = db == null ? null : Repository(db) {
     if (db == null) {
       _seed();
     } else {
@@ -28,6 +33,10 @@ class AppState extends ChangeNotifier {
 
   final SupabaseClient? db;
   final Repository? _repo;
+
+  /// Phone notifications (null in tests).
+  final Reminders? reminders;
+  Timer? _remindTimer;
 
   late List<Space> spaces;
   late List<Project> projects;
@@ -65,6 +74,39 @@ class AppState extends ChangeNotifier {
 
   String newId(String prefix) => newUuid();
 
+  // ---------- Saved settings (stay on the phone) ----------
+  Future<void> loadPrefs() async {
+    try {
+      final p = await SharedPreferences.getInstance();
+      lang = p.getString('lang') ?? lang;
+      themeMode = ThemeMode.values.byName(p.getString('theme') ?? themeMode.name);
+      notifTasks = p.getBool('notifTasks') ?? notifTasks;
+      notifDue = p.getBool('notifDue') ?? notifDue;
+    } catch (_) {}
+  }
+
+  Future<void> _savePrefs() async {
+    try {
+      final p = await SharedPreferences.getInstance();
+      await p.setString('lang', lang);
+      await p.setString('theme', themeMode.name);
+      await p.setBool('notifTasks', notifTasks);
+      await p.setBool('notifDue', notifDue);
+    } catch (_) {}
+  }
+
+  /// Rebuilds the phone's reminder schedule shortly after the last change.
+  void _scheduleReminders() {
+    final r = reminders;
+    if (r == null || !signedIn) return;
+    _remindTimer?.cancel();
+    _remindTimer = Timer(const Duration(seconds: 1), () {
+      r
+          .reschedule(tasks: tasks, projects: projects, taskReminders: notifTasks, dueReminders: notifDue, isAr: isAr)
+          .catchError((Object _) {});
+    });
+  }
+
   // ---------- Account ----------
   User? get user => db?.auth.currentUser;
   bool get signedIn => user != null;
@@ -99,6 +141,8 @@ class AppState extends ChangeNotifier {
   }
 
   Future<void> signOut() async {
+    _remindTimer?.cancel();
+    await reminders?.cancelAll();
     try {
       await db?.auth.signOut();
     } catch (_) {}
@@ -136,10 +180,15 @@ class AppState extends ChangeNotifier {
       loading = false;
       notifyListeners();
     }
+    if (reminders != null && (notifTasks || notifDue)) {
+      await reminders!.askPermission();
+      _scheduleReminders();
+    }
   }
 
   /// Saves a change in the background; shows a message if it fails.
   void _save(Future<void> Function(Repository r) op) {
+    _scheduleReminders();
     final repo = _repo;
     if (repo == null) return;
     op(repo).catchError((Object e) {
@@ -199,17 +248,23 @@ class AppState extends ChangeNotifier {
   void setTheme(ThemeMode m) {
     themeMode = m;
     notifyListeners();
+    _savePrefs();
   }
 
   void setLang(String l) {
     lang = l;
     notifyListeners();
+    _savePrefs();
+    _scheduleReminders();
   }
 
   void setNotif({bool? tasksOn, bool? dueOn}) {
     if (tasksOn != null) notifTasks = tasksOn;
     if (dueOn != null) notifDue = dueOn;
     notifyListeners();
+    _savePrefs();
+    if (notifTasks || notifDue) reminders?.askPermission();
+    _scheduleReminders();
   }
 
   void setFilters(TaskFilters f) {
