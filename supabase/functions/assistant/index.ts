@@ -96,6 +96,8 @@ async function runTool(db: any, name: string, args: Record<string, unknown>): Pr
       }
       if (!spaceId) return { result: { error: "The user has no spaces yet." }, changed: false };
       const { data, error } = await db.from("tasks").insert({
+        // The app always sends its own uuid, so don't rely on a column default.
+        id: crypto.randomUUID(),
         title: args.title,
         date: args.date,
         time: args.time ?? null,
@@ -103,6 +105,9 @@ async function runTool(db: any, name: string, args: Record<string, unknown>): Pr
         project_id: args.project_id ?? null,
         priority: args.priority ?? "medium",
         description: args.description ?? "",
+        status: "todo",
+        // A task with a time gets the phone reminder, like one added by hand.
+        reminder: !!args.time,
       }).select("id, title, date, time").single();
       return { result: error ? { error: error.message } : data, changed: !error };
     }
