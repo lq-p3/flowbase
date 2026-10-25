@@ -107,8 +107,9 @@ async function runTool(db: any, name: string, args: Record<string, unknown>): Pr
       return { result: error ? { error: error.message } : data, changed: !error };
     }
     case "update_task": {
-      const { id, ...fields } = args;
-      const { data, error } = await db.from("tasks").update(fields).eq("id", id).select("id, title, date, time, status").single();
+      const fields: Record<string, unknown> = {};
+      for (const k of ["title", "date", "time", "priority", "status"]) if (args[k] !== undefined) fields[k] = args[k];
+      const { data, error } = await db.from("tasks").update(fields).eq("id", args.id).select("id, title, date, time, status").single();
       return { result: error ? { error: error.message } : data, changed: !error };
     }
     default:
@@ -133,8 +134,11 @@ Deno.serve(async (req) => {
   const system = `You are FlowBase's personal secretary for ${name || "the user"}.
 Today is ${today} (the user's local date). Reply in ${lang === "ar" ? "Arabic (friendly Gulf style)" : "English"}, short and clear.
 Use the tools to read or change the user's tasks; never invent tasks or ids. Look up spaces and projects before choosing one.
-Resolve words like "tomorrow" or "next Sunday" to real dates from today. After changing something, say exactly what you did.
-Do not delete anything.`;
+Resolve words like "tomorrow" or "next Sunday" to real dates from today.
+When the user asks you to add, remind, schedule or plan something, CALL create_task right away (one call per task).
+Do not ask for confirmation and do not say a task was added unless the tool returned it; pick sensible defaults
+(first matching space, no time if none was given, "8 at night" = 20:00, "8 in the morning" = 08:00).
+After changing something, say exactly what you did (title, date, time). Do not delete anything.`;
 
   // deno-lint-ignore no-explicit-any
   const contents: any[] = messages.slice(-20).map((m: { role: string; text: string }) => ({
@@ -143,6 +147,7 @@ Do not delete anything.`;
   }));
 
   let changed = false;
+  const actions: string[] = [];
   for (let step = 0; step < 6; step++) {
     const res = await fetch(
       `https://generativelanguage.googleapis.com/v1beta/models/${MODEL}:generateContent`,
@@ -154,6 +159,7 @@ Do not delete anything.`;
     );
     if (!res.ok) {
       const detail = await res.text();
+      console.error("gemini", res.status, detail.slice(0, 500));
       return json({ error: res.status === 429 ? "Daily free limit reached, try again later." : `Gemini error ${res.status}`, detail }, 502);
     }
     const out = await res.json();
@@ -163,14 +169,17 @@ Do not delete anything.`;
     if (calls.length === 0) {
       // deno-lint-ignore no-explicit-any
       const text = parts.map((p: any) => p.text ?? "").join("").trim();
-      return json({ reply: text, changed });
+      console.log("reply", step, actions.join(","), text.slice(0, 200));
+      return json({ reply: text, changed, actions });
     }
     contents.push({ role: "model", parts });
     // deno-lint-ignore no-explicit-any
     const responses: any[] = [];
     for (const c of calls) {
       const r = await runTool(db, c.functionCall.name, c.functionCall.args ?? {});
+      console.log("tool", c.functionCall.name, JSON.stringify(c.functionCall.args), JSON.stringify(r.result).slice(0, 300));
       changed ||= r.changed;
+      if (r.changed) actions.push(c.functionCall.name);
       responses.push({ functionResponse: { name: c.functionCall.name, response: { result: r.result } } });
     }
     contents.push({ role: "user", parts: responses });

@@ -15,8 +15,13 @@ class AssistantScreen extends StatefulWidget {
 class _AssistantScreenState extends State<AssistantScreen> {
   final _input = TextEditingController();
   final _scroll = ScrollController();
-  final List<({bool fromUser, String text})> _chat = [];
   bool _busy = false;
+
+  @override
+  void initState() {
+    super.initState();
+    _toBottom();
+  }
 
   @override
   void dispose() {
@@ -29,17 +34,13 @@ class _AssistantScreenState extends State<AssistantScreen> {
     final text = _input.text.trim();
     if (text.isEmpty || _busy) return;
     setState(() {
-      _chat.add((fromUser: true, text: text));
       _input.clear();
       _busy = true;
     });
     _toBottom();
-    final (reply, error) = await context.appRead.askAssistant(_chat);
+    await context.appRead.askAssistant(text);
     if (!mounted) return;
-    setState(() {
-      _busy = false;
-      _chat.add((fromUser: false, text: reply ?? '${context.s['assistantErr']}: $error'));
-    });
+    setState(() => _busy = false);
     _toBottom();
   }
 
@@ -49,9 +50,10 @@ class _AssistantScreenState extends State<AssistantScreen> {
 
   @override
   Widget build(BuildContext context) {
+    final app = context.app;
     final c = context.fb;
     final t = context.s;
-    final items = [(fromUser: false, text: t['assistantHi']), ..._chat];
+    final items = [(fromUser: false, text: t['assistantHi']), ...app.assistantChat];
 
     Widget bubble(({bool fromUser, String text}) m) => Align(
           alignment: m.fromUser ? AlignmentDirectional.centerEnd : AlignmentDirectional.centerStart,
@@ -72,7 +74,12 @@ class _AssistantScreenState extends State<AssistantScreen> {
       body: SafeArea(
         child: Column(
           children: [
-            DetailHeader(title: t['assistant']),
+            DetailHeader(
+              title: t['assistant'],
+              trailing: app.assistantChat.isEmpty
+                  ? null
+                  : FbIconButton(icon: Icons.delete_sweep_outlined, label: t['assistantClear'], onTap: context.appRead.clearAssistant),
+            ),
             Expanded(
               child: ListView(
                 controller: _scroll,

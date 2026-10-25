@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'dart:convert';
 
 import 'package:flutter/material.dart';
 import 'package:shared_preferences/shared_preferences.dart';
@@ -51,6 +52,9 @@ class AppState extends ChangeNotifier {
   bool notifDue = true;
   bool loading = false;
 
+  /// The chat with the AI secretary. Kept here (and on the phone) so it survives leaving the screen.
+  List<({bool fromUser, String text})> assistantChat = [];
+
   void _seed() {
     spaces = mockSpaces();
     projects = mockProjects();
@@ -82,6 +86,12 @@ class AppState extends ChangeNotifier {
       themeMode = ThemeMode.values.byName(p.getString('theme') ?? themeMode.name);
       notifTasks = p.getBool('notifTasks') ?? notifTasks;
       notifDue = p.getBool('notifDue') ?? notifDue;
+      final chat = p.getString('assistantChat');
+      if (chat != null) {
+        assistantChat = [
+          for (final m in jsonDecode(chat) as List) (fromUser: m['u'] as bool, text: m['t'] as String),
+        ];
+      }
     } catch (_) {}
   }
 
@@ -92,6 +102,8 @@ class AppState extends ChangeNotifier {
       await p.setString('theme', themeMode.name);
       await p.setBool('notifTasks', notifTasks);
       await p.setBool('notifDue', notifDue);
+      final last = assistantChat.length > 40 ? assistantChat.sublist(assistantChat.length - 40) : assistantChat;
+      await p.setString('assistantChat', jsonEncode([for (final m in last) {'u': m.fromUser, 't': m.text}]));
     } catch (_) {}
   }
 
@@ -143,6 +155,8 @@ class AppState extends ChangeNotifier {
   Future<void> signOut() async {
     _remindTimer?.cancel();
     await reminders?.cancelAll();
+    assistantChat = [];
+    _savePrefs();
     try {
       await db?.auth.signOut();
     } catch (_) {}
@@ -188,7 +202,23 @@ class AppState extends ChangeNotifier {
 
   /// Sends the chat to the AI secretary (Supabase Edge Function `assistant`).
   /// Returns (reply, error). Reloads the data when the secretary changed tasks.
-  Future<(String?, String?)> askAssistant(List<({bool fromUser, String text})> chat) async {
+  Future<void> askAssistant(String text) async {
+    assistantChat = [...assistantChat, (fromUser: true, text: text)];
+    notifyListeners();
+    final (reply, error) = await _callAssistant(assistantChat);
+    final note = isAr ? 'ما قدر السكرتير يرد' : 'The secretary could not answer';
+    assistantChat = [...assistantChat, (fromUser: false, text: reply ?? '$note: $error')];
+    notifyListeners();
+    _savePrefs();
+  }
+
+  void clearAssistant() {
+    assistantChat = [];
+    notifyListeners();
+    _savePrefs();
+  }
+
+  Future<(String?, String?)> _callAssistant(List<({bool fromUser, String text})> chat) async {
     try {
       final d = kToday;
       final today = '${d.year}-${d.month.toString().padLeft(2, '0')}-${d.day.toString().padLeft(2, '0')}';
