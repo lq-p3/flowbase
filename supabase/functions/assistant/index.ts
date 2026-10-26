@@ -134,15 +134,16 @@ Deno.serve(async (req) => {
   const { data: { user } } = await db.auth.getUser(auth.replace("Bearer ", ""));
   if (!user) return json({ error: "Not signed in" }, 401);
 
-  const { messages = [], today, lang = "ar" } = await req.json();
+  const { messages = [], today, now, lang = "ar" } = await req.json();
   const name = user.user_metadata?.full_name ?? "";
   const system = `You are FlowBase's personal secretary for ${name || "the user"}.
-Today is ${today} (the user's local date). Reply in ${lang === "ar" ? "Arabic (friendly Gulf style)" : "English"}, short and clear.
+Today is ${today}${now ? `, and the time now is ${now}` : ""} (the user's local date and time). Reply in ${lang === "ar" ? "Arabic (friendly Gulf style)" : "English"}, short and clear.
 Use the tools to read or change the user's tasks; never invent tasks or ids. Look up spaces and projects before choosing one.
 Resolve words like "tomorrow" or "next Sunday" to real dates from today.
 When the user asks you to add, remind, schedule or plan something, CALL create_task right away (one call per task).
 Do not ask for confirmation and do not say a task was added unless the tool returned it; pick sensible defaults
-(first matching space, no time if none was given, "8 at night" = 20:00, "8 in the morning" = 08:00).
+(first matching space, no time if none was given, "8 at night" = 20:00, "8 in the morning" = 08:00,
+"in an hour" = now + 1 hour, rolling over to tomorrow after midnight).
 After changing something, say exactly what you did (title, date, time). Do not delete anything.`;
 
   // deno-lint-ignore no-explicit-any

@@ -224,6 +224,7 @@ class AppState extends ChangeNotifier {
       final today = '${d.year}-${d.month.toString().padLeft(2, '0')}-${d.day.toString().padLeft(2, '0')}';
       final res = await db!.functions.invoke('assistant', body: {
         'today': today,
+        'now': '${DateTime.now().hour.toString().padLeft(2, '0')}:${DateTime.now().minute.toString().padLeft(2, '0')}',
         'lang': lang,
         'messages': [for (final m in chat) {'role': m.fromUser ? 'user' : 'model', 'text': m.text}],
       });
