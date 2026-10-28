@@ -62,7 +62,7 @@ async function handle(update: Record<string, unknown>) {
   });
   const reply = out.reply ?? (out.status === 502 && out.error?.startsWith("Daily")
     ? "خلص الحد المجاني اليوم، جرّب بعدين 🙏"
-    : "صار خطأ، جرّب مرة ثانية.");
+    : "الذكاء الاصطناعي مشغول الحين، جرّب بعد دقيقة 🙏");
   if (out.reply) await db.from("telegram_messages").insert({ user_id: uid, role: "model", text: out.reply });
   await say(chatId, reply);
 }

@@ -4,6 +4,25 @@
 // (no user login), so Row Level Security alone cannot be relied on there.
 
 const MODEL = Deno.env.get("GEMINI_MODEL") ?? "gemini-2.5-flash";
+// A lighter free model to fall back on when the main one is busy.
+const FALLBACK_MODEL = "gemini-2.5-flash-lite";
+
+// Ask Gemini. When Google says it is busy (503) or hiccups (500), wait a moment and try again,
+// then try the lighter model, instead of failing the user's message.
+async function askGemini(key: string, body: string): Promise<Response> {
+  let res: Response | undefined;
+  for (const [model, wait] of [[MODEL, 0], [MODEL, 1500], [FALLBACK_MODEL, 0], [FALLBACK_MODEL, 3000]] as const) {
+    if (wait) await new Promise((r) => setTimeout(r, wait));
+    res = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json", "x-goog-api-key": key },
+      body,
+    });
+    if (res.status !== 503 && res.status !== 500) return res;
+    console.error("gemini busy", model, res.status);
+  }
+  return res!;
+}
 
 // ---------- Tools Gemini may call ----------
 const priority = { type: "string", enum: ["low", "medium", "high", "urgent"] };
@@ -284,18 +303,21 @@ How you work:
   let changed = false;
   const actions: string[] = [];
   for (let step = 0; step < 10; step++) {
-    const res = await fetch(
-      `https://generativelanguage.googleapis.com/v1beta/models/${MODEL}:generateContent`,
-      {
-        method: "POST",
-        headers: { "Content-Type": "application/json", "x-goog-api-key": GEMINI_KEY },
-        body: JSON.stringify({ systemInstruction: { parts: [{ text: system }] }, contents, tools }),
-      },
+    const res = await askGemini(
+      GEMINI_KEY,
+      JSON.stringify({ systemInstruction: { parts: [{ text: system }] }, contents, tools }),
     );
     if (!res.ok) {
       const detail = await res.text();
       console.error("gemini", res.status, detail.slice(0, 500));
       const error = res.status === 429 ? "Daily free limit reached, try again later." : `Gemini error ${res.status}`;
+      // Some steps may already be done; say so instead of a bare error.
+      if (actions.length) {
+        const reply = lang === "ar"
+          ? `سويت جزء من طلبك (${actions.length} خطوة)، بس الخادم مشغول الحين وما قدرت أكمل. شيّك التطبيق، وجرّب تكمّل بعد شوي.`
+          : `I did part of it (${actions.length} steps) but the AI service is busy. Check the app and try again shortly.`;
+        return { reply, changed, actions };
+      }
       return { error, status: 502, changed, actions };
     }
     const out = await res.json();
