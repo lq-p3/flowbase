@@ -1,4 +1,6 @@
+import 'package:flutter/gestures.dart';
 import 'package:flutter/material.dart';
+import 'package:url_launcher/url_launcher.dart';
 
 import '../core/context_ext.dart';
 import '../core/tokens.dart';
@@ -66,7 +68,11 @@ class _AssistantScreenState extends State<AssistantScreen> {
               border: m.fromUser ? null : Border.all(color: c.border),
               borderRadius: BorderRadius.circular(Rad.card),
             ),
-            child: Text(m.text, style: TextStyle(fontSize: 15, height: 1.45, color: m.fromUser ? Colors.white : c.text)),
+            child: _MessageText(
+              m.text,
+              style: TextStyle(fontSize: 15, height: 1.45, color: m.fromUser ? Colors.white : c.text),
+              linkColor: m.fromUser ? Colors.white : c.primary,
+            ),
           ),
         );
 
@@ -120,5 +126,52 @@ class _AssistantScreenState extends State<AssistantScreen> {
         ),
       ),
     );
+  }
+}
+
+/// A chat message you can select and copy (long press), with web links you can tap.
+class _MessageText extends StatefulWidget {
+  const _MessageText(this.text, {required this.style, required this.linkColor});
+  final String text;
+  final TextStyle style;
+  final Color linkColor;
+  @override
+  State<_MessageText> createState() => _MessageTextState();
+}
+
+class _MessageTextState extends State<_MessageText> {
+  static final _link = RegExp(r'https?://[^\s]*[^\s.,!?؟،)]');
+  final _taps = <TapGestureRecognizer>[];
+
+  @override
+  void dispose() {
+    for (final r in _taps) {
+      r.dispose();
+    }
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    for (final r in _taps) {
+      r.dispose();
+    }
+    _taps.clear();
+    final spans = <TextSpan>[];
+    var start = 0;
+    for (final m in _link.allMatches(widget.text)) {
+      if (m.start > start) spans.add(TextSpan(text: widget.text.substring(start, m.start)));
+      final url = m.group(0)!;
+      final tap = TapGestureRecognizer()..onTap = () => launchUrl(Uri.parse(url), mode: LaunchMode.externalApplication);
+      _taps.add(tap);
+      spans.add(TextSpan(
+        text: url,
+        recognizer: tap,
+        style: TextStyle(color: widget.linkColor, decoration: TextDecoration.underline, decorationColor: widget.linkColor),
+      ));
+      start = m.end;
+    }
+    if (start < widget.text.length) spans.add(TextSpan(text: widget.text.substring(start)));
+    return SelectableText.rich(TextSpan(style: widget.style, children: spans));
   }
 }
