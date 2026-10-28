@@ -2,12 +2,13 @@ import 'package:flutter/material.dart';
 
 import '../core/context_ext.dart';
 
-/// Compact bottom navigation: Home · Tasks · (+) · Calendar · Spaces.
+/// Compact bottom navigation: Today · Tasks · (secretary) · Calendar · Projects.
+/// Creating new items lives on the Tasks and Projects screens; the middle button opens the AI secretary.
 class FbBottomNav extends StatelessWidget {
-  const FbBottomNav({super.key, required this.index, required this.onTap, required this.onCreate});
+  const FbBottomNav({super.key, required this.index, required this.onTap, required this.onSecretary});
   final int index;
   final ValueChanged<int> onTap;
-  final VoidCallback onCreate;
+  final VoidCallback onSecretary;
 
   @override
   Widget build(BuildContext context) {
@@ -63,36 +64,28 @@ class FbBottomNav extends StatelessWidget {
           padding: const EdgeInsets.symmetric(horizontal: 8),
           child: Row(
             children: [
-              item(0, Icons.home_outlined, Icons.home_rounded, t['home']),
+              item(0, Icons.wb_sunny_outlined, Icons.wb_sunny_rounded, t['tabToday']),
               item(1, Icons.checklist_rounded, Icons.checklist_rounded, t['tasks']),
               Expanded(
                 child: Center(
                   heightFactor: 1,
                   child: Semantics(
                     button: true,
-                    label: t['create'],
-                    child: Container(
-                      width: 52,
-                      height: 52,
-                      decoration: BoxDecoration(
-                        borderRadius: BorderRadius.circular(17),
-                        boxShadow: [BoxShadow(color: c.primary.withAlpha(80), blurRadius: 16, offset: const Offset(0, 6))],
-                      ),
-                      child: Material(
-                        color: c.primary,
-                        borderRadius: BorderRadius.circular(17),
-                        child: InkWell(
-                          borderRadius: BorderRadius.circular(17),
-                          onTap: onCreate,
-                          child: const Icon(Icons.add_rounded, size: 28, color: Colors.white),
-                        ),
+                    label: t['assistant'],
+                    child: Material(
+                      color: c.text,
+                      shape: const CircleBorder(),
+                      child: InkWell(
+                        customBorder: const CircleBorder(),
+                        onTap: onSecretary,
+                        child: SizedBox(width: 54, height: 54, child: Icon(Icons.auto_awesome_rounded, size: 24, color: c.bg)),
                       ),
                     ),
                   ),
                 ),
               ),
               item(2, Icons.calendar_month_outlined, Icons.calendar_month_rounded, t['calendar']),
-              item(3, Icons.grid_view_outlined, Icons.grid_view_rounded, t['spaces']),
+              item(3, Icons.folder_outlined, Icons.folder_rounded, t['projects']),
             ],
           ),
         ),

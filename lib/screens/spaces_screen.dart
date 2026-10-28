@@ -23,14 +23,30 @@ class SpacesScreen extends StatelessWidget {
       padding: const EdgeInsets.only(bottom: 28),
       children: [
         PageHeader(
-          title: t['spaces'],
-          subtitle: t['spacesSub'],
+          title: t['projects'],
+          subtitle: t['projectsSub'],
           actions: [
             FbIconButton(icon: Icons.search_rounded, label: t['search'], bordered: true, onTap: () => push(context, const SearchScreen())),
             FbIconButton(icon: Icons.add_rounded, label: t['createSpace'], background: c.primary, foreground: Colors.white, onTap: create),
           ],
         ),
-        const SizedBox(height: 20),
+        // Active projects (moved here from the home screen)
+        if (app.activeProjects.isNotEmpty) ...[
+          const SizedBox(height: 20),
+          SectionHeader(title: t['activeProjects'], count: app.activeProjects.length, padding: const EdgeInsets.symmetric(horizontal: Sp.page)),
+          SizedBox(
+            height: 176,
+            child: ListView.separated(
+              scrollDirection: Axis.horizontal,
+              padding: const EdgeInsets.symmetric(horizontal: Sp.page),
+              itemCount: app.activeProjects.length,
+              separatorBuilder: (_, __) => const SizedBox(width: 12),
+              itemBuilder: (_, i) => Align(alignment: Alignment.topCenter, child: ProjectCard(project: app.activeProjects[i])),
+            ),
+          ),
+        ],
+        const SizedBox(height: 14),
+        SectionHeader(title: t['spaces'], padding: const EdgeInsets.symmetric(horizontal: Sp.page)),
         Padding(
           padding: const EdgeInsets.symmetric(horizontal: Sp.page),
           child: app.spaces.isEmpty

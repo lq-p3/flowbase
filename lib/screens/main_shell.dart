@@ -5,7 +5,8 @@ import 'package:flutter/material.dart';
 import '../core/context_ext.dart';
 import '../widgets/bottom_nav.dart';
 import '../widgets/layout.dart';
-import '../widgets/overlays.dart';
+import '../navigation.dart';
+import 'assistant_screen.dart';
 import 'calendar_screen.dart';
 import 'home_screen.dart';
 import 'spaces_screen.dart';
@@ -74,7 +75,7 @@ class _MainShellState extends State<MainShell> {
                 ),
         ),
       ),
-      bottomNavigationBar: FbBottomNav(index: index, onTap: _select, onCreate: () => showCreateSheet(context)),
+      bottomNavigationBar: FbBottomNav(index: index, onTap: _select, onSecretary: () => push(context, const AssistantScreen())),
     );
   }
 }

@@ -98,6 +98,8 @@ class _TasksScreenState extends State<TasksScreen> {
                 badge: fc > 0 ? '$fc' : null,
                 onTap: () => showFiltersSheet(context),
               ),
+              const SizedBox(width: 8),
+              FbIconButton(icon: Icons.add_rounded, label: t['create'], background: c.primary, foreground: Colors.white, onTap: () => showCreateSheet(context)),
             ],
           ),
         ),
