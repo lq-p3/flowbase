@@ -130,7 +130,7 @@ class _HierarchyVisual extends StatelessWidget {
     final space = app.space('study');
     final project = app.project('ai');
     final task = app.task('t33');
-    final shadow = [BoxShadow(color: const Color(0xFF17182B).withAlpha(18), blurRadius: 18, offset: const Offset(0, 6))];
+    final shadow = [BoxShadow(color: const Color(0xFF15161F).withAlpha(18), blurRadius: 18, offset: const Offset(0, 6))];
     BoxDecoration card() => BoxDecoration(color: c.surface, borderRadius: BorderRadius.circular(14), boxShadow: shadow);
     final done = task?.subtasks.where((s) => s.done).length ?? 0;
     final total = task?.subtasks.length ?? 0;
