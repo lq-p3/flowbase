@@ -3,23 +3,26 @@
 // Every query names the user explicitly, because the Telegram bot runs with the server key
 // (no user login), so Row Level Security alone cannot be relied on there.
 
-const MODEL = Deno.env.get("GEMINI_MODEL") ?? "gemini-2.5-flash";
-// A lighter free model to fall back on when the main one is busy.
-const FALLBACK_MODEL = "gemini-2.5-flash-lite";
+// Free Gemini models, best first. Each one has its own free daily limit (gemini-2.5-flash allows
+// only about 20 requests a day), so when one runs out or is busy we move on to the next.
+const MODELS = [Deno.env.get("GEMINI_MODEL") ?? "gemini-2.5-flash", "gemini-2.5-flash-lite", "gemini-2.0-flash"];
 
-// Ask Gemini. When Google says it is busy (503) or hiccups (500), wait a moment and try again,
-// then try the lighter model, instead of failing the user's message.
+// Ask Gemini. Busy (503), hiccup (500): wait a moment and retry once. Out of free quota (429):
+// go straight to the next model. Only when every model fails does the user see an error.
 async function askGemini(key: string, body: string): Promise<Response> {
   let res: Response | undefined;
-  for (const [model, wait] of [[MODEL, 0], [MODEL, 1500], [FALLBACK_MODEL, 0], [FALLBACK_MODEL, 3000]] as const) {
-    if (wait) await new Promise((r) => setTimeout(r, wait));
-    res = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent`, {
-      method: "POST",
-      headers: { "Content-Type": "application/json", "x-goog-api-key": key },
-      body,
-    });
-    if (res.status !== 503 && res.status !== 500) return res;
-    console.error("gemini busy", model, res.status);
+  for (const model of MODELS) {
+    for (let attempt = 0; attempt < 2; attempt++) {
+      if (attempt) await new Promise((r) => setTimeout(r, 1500));
+      res = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json", "x-goog-api-key": key },
+        body,
+      });
+      if (![429, 500, 503].includes(res.status)) return res;
+      console.error("gemini unavailable", model, res.status);
+      if (res.status === 429) break;
+    }
   }
   return res!;
 }
