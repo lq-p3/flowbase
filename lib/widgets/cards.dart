@@ -103,9 +103,12 @@ class TaskCard extends StatelessWidget {
 
 /// A group of tasks in one rounded box, separated by thin lines (the calm list style).
 class TaskGroup extends StatelessWidget {
-  const TaskGroup({super.key, required this.tasks, this.mode = WhenMode.time});
+  const TaskGroup({super.key, required this.tasks, this.mode = WhenMode.time, this.inSpace = false, this.inProject = false});
   final List<Task> tasks;
   final WhenMode mode;
+
+  /// Shown inside a space / project page, so that name is left out of each line.
+  final bool inSpace, inProject;
 
   @override
   Widget build(BuildContext context) {
@@ -115,7 +118,7 @@ class TaskGroup extends StatelessWidget {
       decoration: BoxDecoration(color: c.surface, borderRadius: BorderRadius.circular(20)),
       child: Column(
         children: [
-          for (var i = 0; i < tasks.length; i++) TaskRow(key: ValueKey(tasks[i].id), task: tasks[i], mode: mode, last: i == tasks.length - 1),
+          for (var i = 0; i < tasks.length; i++) TaskRow(key: ValueKey(tasks[i].id), task: tasks[i], mode: mode, last: i == tasks.length - 1, showSpace: !inSpace && !inProject, showProject: !inProject),
         ],
       ),
     );
@@ -124,10 +127,10 @@ class TaskGroup extends StatelessWidget {
 
 /// One line in a [TaskGroup]: check · title · "time · space · steps" · high-priority dot.
 class TaskRow extends StatelessWidget {
-  const TaskRow({super.key, required this.task, this.mode = WhenMode.time, this.last = false});
+  const TaskRow({super.key, required this.task, this.mode = WhenMode.time, this.last = false, this.showSpace = true, this.showProject = true});
   final Task task;
   final WhenMode mode;
-  final bool last;
+  final bool last, showSpace, showProject;
 
   @override
   Widget build(BuildContext context) {
@@ -149,8 +152,8 @@ class TaskRow extends StatelessWidget {
     final steps = task.subtasks.isEmpty ? null : '${task.subtasks.where((x) => x.done).length}/${task.subtasks.length}';
     final meta = [
       if (when.isNotEmpty) when,
-      app.space(task.spaceId)?.name.of(ar),
-      app.project(task.projectId)?.name.of(ar),
+      if (showSpace) app.space(task.spaceId)?.name.of(ar),
+      if (showProject) app.project(task.projectId)?.name.of(ar),
       if (steps != null) steps,
     ].whereType<String>().join(' · ');
     final high = task.priority == Priority.high || task.priority == Priority.urgent;

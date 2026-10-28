@@ -65,24 +65,32 @@ class _AssistantScreenState extends State<AssistantScreen> {
     final t = context.s;
     final items = [(fromUser: false, text: t['assistantHi']), ...app.assistantChat];
 
+    // Your messages: a colored bubble on your side. The secretary's: plain text on a soft panel.
     Widget bubble(({bool fromUser, String text}) m) => Align(
           alignment: m.fromUser ? AlignmentDirectional.centerEnd : AlignmentDirectional.centerStart,
           child: Container(
-            margin: const EdgeInsets.symmetric(vertical: 4),
-            padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
-            constraints: const BoxConstraints(maxWidth: 300),
+            margin: const EdgeInsets.symmetric(vertical: 5),
+            padding: const EdgeInsets.symmetric(horizontal: 15, vertical: 11),
+            constraints: const BoxConstraints(maxWidth: 310),
             decoration: BoxDecoration(
               color: m.fromUser ? c.primary : c.surface,
-              border: m.fromUser ? null : Border.all(color: c.border),
-              borderRadius: BorderRadius.circular(Rad.card),
+              borderRadius: BorderRadiusDirectional.only(
+                topStart: const Radius.circular(18),
+                topEnd: const Radius.circular(18),
+                bottomStart: Radius.circular(m.fromUser ? 18 : 6),
+                bottomEnd: Radius.circular(m.fromUser ? 6 : 18),
+              ),
             ),
             child: _MessageText(
               m.text,
-              style: TextStyle(fontSize: 15, height: 1.45, color: m.fromUser ? Colors.white : c.text),
+              style: TextStyle(fontSize: 15, height: 1.6, color: m.fromUser ? Colors.white : c.text),
               linkColor: m.fromUser ? Colors.white : c.primary,
             ),
           ),
         );
+
+    // Ready-made questions, shown while the chat is empty.
+    final ideas = [t['ideaTomorrow'], t['ideaWeek'], t['ideaTelegram']];
 
     return Scaffold(
       body: SafeArea(
@@ -100,6 +108,26 @@ class _AssistantScreenState extends State<AssistantScreen> {
                 padding: const EdgeInsets.fromLTRB(Sp.page, 8, Sp.page, 8),
                 children: [
                   for (final m in items) bubble(m),
+                  if (app.assistantChat.isEmpty && !_busy) ...[
+                    const SizedBox(height: 10),
+                    Wrap(
+                      spacing: 8,
+                      runSpacing: 8,
+                      children: [
+                        for (final idea in ideas)
+                          ActionChip(
+                            label: Text(idea, style: TextStyle(fontSize: 13, color: c.text)),
+                            backgroundColor: c.surface,
+                            side: BorderSide(color: c.border),
+                            shape: const StadiumBorder(),
+                            onPressed: () {
+                              _input.text = idea;
+                              _send();
+                            },
+                          ),
+                      ],
+                    ),
+                  ],
                   if (_busy)
                     Align(
                       alignment: AlignmentDirectional.centerStart,
@@ -126,7 +154,7 @@ class _AssistantScreenState extends State<AssistantScreen> {
                     ),
                   ),
                   const SizedBox(width: 8),
-                  FbIconButton(icon: Icons.send_rounded, label: t['assistantPh'], bordered: true, directional: true, onTap: _busy ? () {} : _send),
+                  FbIconButton(icon: Icons.send_rounded, label: t['assistantPh'], background: c.primary, foreground: Colors.white, directional: true, onTap: _busy ? () {} : _send),
                 ],
               ),
             ),

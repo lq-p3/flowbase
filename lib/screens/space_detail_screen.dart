@@ -110,11 +110,7 @@ class SpaceDetailScreen extends StatelessWidget {
                   if (active.isEmpty)
                     Text(t['noActiveTasks'], style: TextStyle(fontSize: 14, color: c.text2))
                   else
-                    for (final task in active.take(4))
-                      Padding(
-                        padding: const EdgeInsets.only(bottom: 10),
-                        child: TaskCard(key: ValueKey(task.id), task: task, mode: WhenMode.date),
-                      ),
+                    TaskGroup(tasks: active.take(4).toList(), mode: WhenMode.date, inSpace: true),
                   if (active.length > 4)
                     Text(f.nActive(active.length), textAlign: TextAlign.center, style: TextStyle(fontSize: 13, color: c.text2)),
                 ],

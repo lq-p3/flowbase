@@ -126,11 +126,7 @@ class _ProjectDetailScreenState extends State<ProjectDetailScreen> {
                       child: Text(t['noTasksHere'], textAlign: TextAlign.center, style: TextStyle(fontSize: 14, color: c.text2)),
                     )
                   else
-                    for (final task in list)
-                      Padding(
-                        padding: const EdgeInsets.only(bottom: 10),
-                        child: TaskCard(key: ValueKey(task.id), task: task, mode: WhenMode.date),
-                      ),
+                    TaskGroup(tasks: list, mode: WhenMode.date, inProject: true),
                   if (!project.notes.isEmpty) ...[
                     const SizedBox(height: 8),
                     FbCard(
