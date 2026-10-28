@@ -9,7 +9,10 @@ import '../widgets/layout.dart';
 
 /// Chat with the AI secretary. It can read, add and update tasks for you.
 class AssistantScreen extends StatefulWidget {
-  const AssistantScreen({super.key});
+  const AssistantScreen({super.key, this.initialMessage});
+
+  /// Sent right away when the screen opens (e.g. typed on the home screen).
+  final String? initialMessage;
   @override
   State<AssistantScreen> createState() => _AssistantScreenState();
 }
@@ -23,6 +26,11 @@ class _AssistantScreenState extends State<AssistantScreen> {
   void initState() {
     super.initState();
     _toBottom();
+    final first = widget.initialMessage?.trim() ?? '';
+    if (first.isNotEmpty) {
+      _input.text = first;
+      WidgetsBinding.instance.addPostFrameCallback((_) => _send());
+    }
   }
 
   @override

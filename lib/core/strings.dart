@@ -7,6 +7,12 @@ class Strings {
 }
 
 const Map<String, String> _en = {
+  'secretary': 'Your secretary', 'secAsk': 'Ask your secretary anything…', 'secSend': 'Send to secretary',
+  'secEmpty': 'Your day is free. Want me to plan something?', 'secAllDone': 'You finished everything today. Nice work.',
+  'secTasks': 'You have {n} tasks today.', 'secNext': 'Next: {task}', 'secAt': ' at {time}', 'secOverdue': ' And {n} overdue.',
+  'schedule': "Today's schedule", 'doneOf': '{d} of {n} done', 'nowTag': 'Next',
+  'overdueN': '{n} overdue tasks', 'sortForMe': 'Sort them', 'sortPrompt': 'Reschedule my overdue tasks to suitable days',
+  'highPriority': 'High priority',
   'home': 'Home', 'tasks': 'Tasks', 'calendar': 'Calendar', 'spaces': 'Spaces', 'create': 'Create',
   'back': 'Back', 'more': 'More options', 'close': 'Close', 'search': 'Search', 'profile': 'Profile',
   'settings': 'Settings', 'add': 'Add', 'ok': 'OK',
@@ -93,6 +99,12 @@ const Map<String, String> _en = {
 };
 
 const Map<String, String> _ar = {
+  'secretary': 'سكرتيرك', 'secAsk': 'اطلب أي شي من سكرتيرك…', 'secSend': 'أرسل للسكرتير',
+  'secEmpty': 'يومك فاضي. تبي أخطط لك شي؟', 'secAllDone': 'خلّصت كل مهام اليوم. عافاك!',
+  'secTasks': 'عندك {n} مهام اليوم.', 'secNext': 'التالية: {task}', 'secAt': ' الساعة {time}', 'secOverdue': ' وفيه {n} متأخرة.',
+  'schedule': 'جدول اليوم', 'doneOf': 'خلصت {d} من {n}', 'nowTag': 'التالية',
+  'overdueN': '{n} مهام متأخرة', 'sortForMe': 'رتّبها لي', 'sortPrompt': 'رتّب مهامي المتأخرة وانقلها لأيام مناسبة',
+  'highPriority': 'أولوية عالية',
   'home': 'الرئيسية', 'tasks': 'المهام', 'calendar': 'التقويم', 'spaces': 'المساحات', 'create': 'إنشاء',
   'back': 'رجوع', 'more': 'خيارات إضافية', 'close': 'إغلاق', 'search': 'بحث', 'profile': 'الملف الشخصي',
   'settings': 'الإعدادات', 'add': 'إضافة', 'ok': 'حسنًا',
