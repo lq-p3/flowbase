@@ -183,8 +183,11 @@ async function runTool(db: Db, uid: string, name: string, args: Args): Promise<T
       return { result: { spaces, projects }, changed: false };
     }
     case "list_tasks": {
+      // The model sometimes sends only one of the two dates; use it for both.
+      const from = args.from ?? args.to, to = args.to ?? args.from;
+      if (!from) return { result: { error: "Send from and to as YYYY-MM-DD." }, changed: false };
       let q = db.from("tasks").select("id, title, date, time, priority, status, space_id, project_id, subtasks(title, done)")
-        .eq("user_id", uid).gte("date", args.from).lte("date", args.to).order("date").limit(100);
+        .eq("user_id", uid).gte("date", from).lte("date", to).order("date").limit(100);
       if (args.project_id) q = q.eq("project_id", args.project_id);
       if (!args.include_done) q = q.neq("status", "done");
       const { data, error } = await q;
@@ -277,6 +280,9 @@ export async function runAgent(input: AgentInput): Promise<AgentOutput> {
 Today is ${today}${now ? `, and the time now is ${now}` : ""} (the user's local date and time). Reply in ${lang === "ar" ? "Arabic (friendly Gulf style)" : "English"}, short and clear.
 ${channel ?? ""}
 How you work:
+- Act only on the user's LATEST message. Earlier messages are context and were already handled, even if a reply there
+  was an error; never redo them unless the user asks again.
+- If a tool returns an error, fix the arguments and try once more before telling the user.
 - Use the tools to read or change the user's data; never invent tasks or ids. Look up spaces and projects before choosing one.
 - Resolve words like "tomorrow" or "next Sunday" to real dates from today.
 - A single thing to do or remember: CALL create_task right away (one call per task).

@@ -63,7 +63,8 @@ async function handle(update: Record<string, unknown>) {
   const reply = out.reply ?? (out.status === 502 && out.error?.startsWith("Daily")
     ? "خلص الحد المجاني اليوم، جرّب بعدين 🙏"
     : "الذكاء الاصطناعي مشغول الحين، جرّب بعد دقيقة 🙏");
-  if (out.reply) await db.from("telegram_messages").insert({ user_id: uid, role: "model", text: out.reply });
+  // Save the reply even when it is an error, so the next message knows this one was answered.
+  await db.from("telegram_messages").insert({ user_id: uid, role: "model", text: reply });
   await say(chatId, reply);
 }
 
