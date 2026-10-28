@@ -124,17 +124,17 @@ class _TasksScreenState extends State<TasksScreen> {
             ),
           ),
         for (final g in groups) ...[
-          const SizedBox(height: 18),
-          Row(
-            children: [
-              Semantics(header: true, child: Text(g.label, style: TextStyle(fontSize: 15, fontWeight: FontWeight.w700, color: c.text))),
-              const SizedBox(width: 8),
-              CountPill(count: g.tasks.length),
-            ],
+          const SizedBox(height: 20),
+          Padding(
+            padding: const EdgeInsetsDirectional.only(start: 4, bottom: 8),
+            child: Row(
+              children: [
+                Expanded(child: Semantics(header: true, child: Text(g.label, style: TextStyle(fontSize: 13, fontWeight: FontWeight.w600, color: c.text2)))),
+                Text('${g.tasks.length}', style: TextStyle(fontSize: 13, color: c.muted)),
+              ],
+            ),
           ),
-          const SizedBox(height: 10),
-          for (final task in g.tasks)
-            Padding(padding: const EdgeInsets.only(bottom: 10), child: TaskCard(key: ValueKey(task.id), task: task, mode: g.mode)),
+          TaskGroup(tasks: g.tasks, mode: g.mode),
         ],
         if (groups.isEmpty)
           Padding(

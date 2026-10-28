@@ -101,6 +101,113 @@ class TaskCard extends StatelessWidget {
   }
 }
 
+/// A group of tasks in one rounded box, separated by thin lines (the calm list style).
+class TaskGroup extends StatelessWidget {
+  const TaskGroup({super.key, required this.tasks, this.mode = WhenMode.time});
+  final List<Task> tasks;
+  final WhenMode mode;
+
+  @override
+  Widget build(BuildContext context) {
+    final c = context.fb;
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 2),
+      decoration: BoxDecoration(color: c.surface, borderRadius: BorderRadius.circular(20)),
+      child: Column(
+        children: [
+          for (var i = 0; i < tasks.length; i++) TaskRow(key: ValueKey(tasks[i].id), task: tasks[i], mode: mode, last: i == tasks.length - 1),
+        ],
+      ),
+    );
+  }
+}
+
+/// One line in a [TaskGroup]: check · title · "time · space · steps" · high-priority dot.
+class TaskRow extends StatelessWidget {
+  const TaskRow({super.key, required this.task, this.mode = WhenMode.time, this.last = false});
+  final Task task;
+  final WhenMode mode;
+  final bool last;
+
+  @override
+  Widget build(BuildContext context) {
+    final app = context.app;
+    final c = context.fb;
+    final f = context.fmt;
+    final t = context.s;
+    final ar = app.isAr;
+    final done = task.isDone;
+    final title = task.title.of(ar);
+
+    var when = '';
+    if (mode == WhenMode.date) {
+      when = f.rel(task.date);
+      if (task.time != null) when += ', ${f.time(task.time)}';
+    } else if (mode == WhenMode.time) {
+      when = f.time(task.time);
+    }
+    final steps = task.subtasks.isEmpty ? null : '${task.subtasks.where((x) => x.done).length}/${task.subtasks.length}';
+    final meta = [
+      if (when.isNotEmpty) when,
+      app.space(task.spaceId)?.name.of(ar),
+      app.project(task.projectId)?.name.of(ar),
+      if (steps != null) steps,
+    ].whereType<String>().join(' · ');
+    final high = task.priority == Priority.high || task.priority == Priority.urgent;
+
+    return InkWell(
+      onTap: () => openTask(context, task.id),
+      child: Container(
+        constraints: const BoxConstraints(minHeight: 62),
+        decoration: BoxDecoration(border: last ? null : Border(bottom: BorderSide(color: c.border))),
+        child: Row(
+          children: [
+            FbCheckbox(
+              checked: done,
+              inProgress: task.status == TaskStatus.inProgress,
+              semanticLabel: '${done ? t['markIncomplete'] : t['markCompleted']}: $title',
+              onTap: () {
+                if (context.appRead.toggleTask(task.id)) showToast(t['taskCompleted']);
+              },
+            ),
+            const SizedBox(width: 4),
+            Expanded(
+              child: Padding(
+                padding: const EdgeInsets.symmetric(vertical: 11),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      title,
+                      style: TextStyle(
+                        fontSize: 15,
+                        fontWeight: done ? FontWeight.w400 : FontWeight.w600,
+                        height: 1.35,
+                        color: done ? c.muted : c.text,
+                        decoration: done ? TextDecoration.lineThrough : null,
+                        decorationColor: c.muted,
+                      ),
+                    ),
+                    if (meta.isNotEmpty) ...[
+                      const SizedBox(height: 2),
+                      Text(meta, maxLines: 1, overflow: TextOverflow.ellipsis, style: TextStyle(fontSize: 12, color: done ? c.muted : c.text2)),
+                    ],
+                  ],
+                ),
+              ),
+            ),
+            if (high && !done)
+              Semantics(
+                label: t['highPriority'],
+                child: Container(width: 8, height: 8, margin: const EdgeInsetsDirectional.only(start: 8, end: 4), decoration: BoxDecoration(color: c.warning, shape: BoxShape.circle)),
+              ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
 /// Wide card in Home's horizontally scrolling "Active Projects".
 class ProjectCard extends StatelessWidget {
   const ProjectCard({super.key, required this.project, this.width = 236});

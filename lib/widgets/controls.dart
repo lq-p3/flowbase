@@ -537,8 +537,8 @@ class SegmentedTabs extends StatelessWidget {
   Widget build(BuildContext context) {
     final c = context.fb;
     return Container(
-      padding: const EdgeInsets.all(4),
-      decoration: BoxDecoration(color: c.surface2, borderRadius: BorderRadius.circular(14)),
+      padding: const EdgeInsets.all(3),
+      decoration: BoxDecoration(color: c.border, borderRadius: BorderRadius.circular(12)),
       child: Row(
         children: [
           for (var i = 0; i < labels.length; i++)
@@ -552,11 +552,12 @@ class SegmentedTabs extends StatelessWidget {
                   child: AnimatedContainer(
                     duration: const Duration(milliseconds: 200),
                     curve: Curves.easeOut,
-                    height: 38,
+                    height: 36,
                     alignment: Alignment.center,
                     decoration: BoxDecoration(
-                      color: i == index ? c.primary : Colors.transparent,
-                      borderRadius: BorderRadius.circular(10),
+                      color: i == index ? c.surface : Colors.transparent,
+                      borderRadius: BorderRadius.circular(9),
+                      boxShadow: i == index ? const [BoxShadow(color: Color(0x14000000), blurRadius: 3, offset: Offset(0, 1))] : null,
                     ),
                     child: Text(
                       labels[i],
@@ -566,7 +567,7 @@ class SegmentedTabs extends StatelessWidget {
                       style: TextStyle(
                         fontSize: 13.5,
                         fontWeight: i == index ? FontWeight.w600 : FontWeight.w500,
-                        color: i == index ? Colors.white : c.text2,
+                        color: i == index ? c.text : c.text2,
                       ),
                     ),
                   ),
