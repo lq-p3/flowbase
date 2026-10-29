@@ -17,7 +17,40 @@ const say = (chatId: number, text: string) =>
 const HELP = "أهلاً 👋 أنا سكرتير FlowBase.\n" +
   "عشان أعرفك: افتح تطبيق FlowBase، وقل للسكرتير ✨ \"اربط تيليجرام\"، واضغط الرابط اللي يعطيك.";
 
+// A tap on a reminder button ("done:<task id>" or "snooze:<task id>", sent by the remind function).
+// deno-lint-ignore no-explicit-any
+async function handleButton(cb: any) {
+  const chatId: number = cb.message?.chat?.id;
+  const answer = (text: string) => tg("answerCallbackQuery", { callback_query_id: cb.id, text });
+  const { data: link } = await db.from("telegram_links").select("user_id").eq("chat_id", chatId).maybeSingle();
+  const [action, taskId] = String(cb.data ?? "").split(":");
+  // Only a task of the user who owns this chat, so a forged button cannot touch someone else's task.
+  const { data: task } = link && taskId
+    ? await db.from("tasks").select("id, title, date, time").eq("id", taskId).eq("user_id", link.user_id).maybeSingle()
+    : { data: null };
+  if (!task) return void await answer("المهمة ما عادت موجودة");
+
+  let text: string;
+  if (action === "done") {
+    await db.from("tasks").update({ status: "done" }).eq("id", task.id);
+    text = `✅ خلصت: ${task.title}`;
+  } else if (action === "snooze") {
+    // One hour later; past midnight it moves to the next day. The date and time are local, so we do
+    // the sum as if they were UTC, which never shifts them.
+    const later = new Date(new Date(`${task.date}T${task.time ?? "09:00:00"}Z`).getTime() + 60 * 60 * 1000);
+    const date = later.toISOString().slice(0, 10), time = later.toISOString().slice(11, 16);
+    await db.from("tasks").update({ date, time }).eq("id", task.id);
+    text = `⏰ أجّلت "${task.title}" للساعة ${time}${date !== task.date ? " بكرة" : ""}`;
+  } else {
+    return void await answer("");
+  }
+  await answer(text);
+  // Replace the reminder with the result, so the buttons cannot be tapped twice.
+  await tg("editMessageText", { chat_id: chatId, message_id: cb.message.message_id, text });
+}
+
 async function handle(update: Record<string, unknown>) {
+  if (update.callback_query) return void await handleButton(update.callback_query);
   // deno-lint-ignore no-explicit-any
   const msg = update.message as any;
   if (!msg?.text || msg.chat?.type !== "private") return;
@@ -74,7 +107,7 @@ Deno.serve(async (req) => {
 
   if (new URL(req.url).searchParams.get("setup") === "1") {
     const r = await tg("setWebhook", {
-      url: `${url}/functions/v1/telegram`, secret_token: secret, allowed_updates: ["message"], drop_pending_updates: true,
+      url: `${url}/functions/v1/telegram`, secret_token: secret, allowed_updates: ["message", "callback_query"], drop_pending_updates: true,
     });
     return new Response(JSON.stringify(r), { headers: { "Content-Type": "application/json" } });
   }
