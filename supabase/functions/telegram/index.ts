@@ -90,7 +90,7 @@ async function handle(update: Record<string, unknown>) {
   const { today, now } = localNow(link.tz);
 
   const out = await runAgent({
-    db, uid, name: user?.user_metadata?.full_name ?? "", messages: (history ?? []).reverse(), today, now, lang: "ar",
+    db, uid, name: user?.user_metadata?.full_name ?? "", messages: (history ?? []).reverse(), today, now, lang: "ar", tz: link.tz,
     channel: "The user is writing from Telegram: plain text only, no Markdown.",
   });
   const reply = out.reply ?? (out.status === 502 && out.error?.startsWith("Daily")

@@ -2,6 +2,7 @@
 // Gemini decides which tool to use; we run the tool on the database and loop until it answers.
 // Every query names the user explicitly, because the Telegram bot runs with the server key
 // (no user login), so Row Level Security alone cannot be relied on there.
+import { createEvent, googleReady, linkUrl, listEvents } from "./google.ts";
 
 // Free Gemini models, best first. Each one has its own free daily limit (gemini-2.5-flash allows
 // only about 20 requests a day), so when one runs out or is busy we move on to the next.
@@ -145,6 +146,36 @@ const baseTools = [
     description: "Delete a saved memory by its id, when the user says it is wrong or no longer true.",
     parameters: { type: "object", properties: { id: { type: "string" } }, required: ["id"] },
   },
+  {
+    name: "google_link",
+    description: "Give the user a link that connects their Google Calendar. Use it when they ask to connect the calendar, or when a calendar tool says it is not linked.",
+    parameters: { type: "object", properties: {} },
+  },
+  {
+    name: "list_events",
+    description: "List the user's Google Calendar events (meetings, appointments) between two dates, inclusive.",
+    parameters: {
+      type: "object",
+      properties: { from: { type: "string", description: "YYYY-MM-DD" }, to: { type: "string", description: "YYYY-MM-DD" } },
+      required: ["from", "to"],
+    },
+  },
+  {
+    name: "create_event",
+    description: "Add a meeting or appointment to the user's Google Calendar. Check list_events for that day first so it does not clash.",
+    parameters: {
+      type: "object",
+      properties: {
+        title: { type: "string" },
+        date: { type: "string", description: "YYYY-MM-DD" },
+        time: { type: "string", description: "HH:MM 24-hour start time" },
+        minutes: { type: "number", description: "Length in minutes, default 60" },
+        location: { type: "string" },
+        description: { type: "string" },
+      },
+      required: ["title", "date", "time"],
+    },
+  },
 ];
 
 export type Args = Record<string, unknown>;
@@ -195,7 +226,7 @@ const subtaskRows = (uid: string, taskId: string, titles: unknown, start = 0) =>
     position: start + i,
   }));
 
-async function runTool(db: Db, uid: string, name: string, args: Args): Promise<ToolResult> {
+async function runTool(db: Db, uid: string, tz: string, name: string, args: Args): Promise<ToolResult> {
   switch (name) {
     case "list_spaces_and_projects": {
       const { data: spaces } = await db.from("spaces").select("id, name").eq("user_id", uid).order("created_at");
@@ -283,6 +314,20 @@ async function runTool(db: Db, uid: string, name: string, args: Args): Promise<T
       const { data, error } = await db.from("memories").delete().eq("id", args.id).eq("user_id", uid).select("text").single();
       return { result: error ? { error: "Memory not found." } : { forgot: data.text }, changed: false };
     }
+    case "google_link": {
+      if (!googleReady()) return { result: { error: "Google Calendar is not set up on the server yet." }, changed: false };
+      return { result: { link: await linkUrl(uid), note: "Valid for 15 minutes. Tell the user to open it and allow access." }, changed: false };
+    }
+    case "list_events": {
+      if (!googleReady()) return { result: { error: "Google Calendar is not set up on the server yet." }, changed: false };
+      const from = (args.from ?? args.to) as string, to = (args.to ?? args.from) as string;
+      return { result: await listEvents(uid, from, to, tz), changed: false };
+    }
+    case "create_event": {
+      if (!googleReady()) return { result: { error: "Google Calendar is not set up on the server yet." }, changed: false };
+      const r = await createEvent(uid, tz, args);
+      return { result: r, changed: false };
+    }
     default:
       return { result: { error: `Unknown tool ${name}` }, changed: false };
   }
@@ -296,6 +341,8 @@ export type AgentInput = {
   today: string;
   now?: string;
   lang: string;
+  // The user's time zone, for calendar events. Defaults to Riyadh.
+  tz?: string;
   // One line about where the user is talking from, added to the instructions.
   channel?: string;
   extraTools?: Record<string, ExtraTool>;
@@ -307,6 +354,7 @@ export async function runAgent(input: AgentInput): Promise<AgentOutput> {
   const GEMINI_KEY = Deno.env.get("GEMINI_API_KEY") ?? "";
   if (!GEMINI_KEY) return { error: "GEMINI_API_KEY is not set", status: 500, changed: false, actions: [] };
   const { db, uid, name, messages, today, now, lang, channel, extraTools = {} } = input;
+  const tz = input.tz ?? "Asia/Riyadh";
 
   // What the secretary already knows about this user, saved earlier with the remember tool.
   const { data: memories } = await db.from("memories").select("id, text").eq("user_id", uid)
@@ -335,6 +383,9 @@ How you work:
 - Deleting is the exception: first tell the user exactly which task you would delete and ask "متأكد؟"; only after they say yes
   in a new message, call delete_task with confirmed=true. Never delete projects or spaces.
 - Do not say something was done unless the tool returned it. After acting, list exactly what you did (titles, dates, times).
+- Calendar: meetings and appointments live in Google Calendar (list_events, create_event); tasks are to-dos in
+  FlowBase. "What do I have tomorrow" = check both. "Book / put a meeting" = create_event (after checking that day with
+  list_events so nothing clashes, and following the memories). If a calendar tool says it is not linked, offer google_link.
 - Memory: when the user tells you something that will still be true later (a preference like "no meetings before 10",
   a habit, a person and their role), CALL remember with one short sentence, then say briefly that you will remember it.
   Follow the memories below when you plan, pick times or answer. If the user says one is wrong, call forget (and
@@ -387,7 +438,7 @@ ${known || "(nothing yet)"}`;
     for (const c of calls) {
       const fn = c.functionCall.name as string;
       const args = c.functionCall.args ?? {};
-      const r = extraTools[fn] ? await extraTools[fn].run(args) : await runTool(db, uid, fn, args);
+      const r = extraTools[fn] ? await extraTools[fn].run(args) : await runTool(db, uid, tz, fn, args);
       console.log("tool", fn, JSON.stringify(args), JSON.stringify(r.result).slice(0, 300));
       changed ||= r.changed;
       if (r.changed) actions.push(fn);
