@@ -8,6 +8,11 @@ const say = (text: string) => new Response(text, { headers: { "Content-Type": "t
 
 Deno.serve(async (req) => {
   const q = new URL(req.url).searchParams;
+  // ?check=1 shows only which custom secret names the server can see (never the values).
+  if (q.get("check")) {
+    const names = Object.keys(Deno.env.toObject()).filter((k) => !/^(SUPABASE_|DENO_|SB_)/.test(k));
+    return say(JSON.stringify(names.map((k) => ({ name: k, filled: !!Deno.env.get(k)?.trim() }))));
+  }
   const state = q.get("state"), code = q.get("code");
   if (q.get("error") || !state || !code) return say("ما تم الربط ❌ رجعت بدون موافقة. اطلب رابط جديد من السكرتير.");
   return say(await finishLink(state, code)
