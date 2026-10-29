@@ -27,6 +27,9 @@ async function askGemini(key: string, body: string): Promise<Response> {
   return res!;
 }
 
+// The memories are sent with every request, so keep the list small (it costs tokens, not money).
+const MAX_MEMORIES = 50;
+
 // ---------- Tools Gemini may call ----------
 const priority = { type: "string", enum: ["low", "medium", "high", "urgent"] };
 const taskFields = {
@@ -127,6 +130,20 @@ const baseTools = [
       properties: { id: { type: "string" }, confirmed: { type: "boolean" } },
       required: ["id", "confirmed"],
     },
+  },
+  {
+    name: "remember",
+    description: "Save one lasting fact about the user: a preference, a habit, a person they work with and their role. Not for tasks.",
+    parameters: {
+      type: "object",
+      properties: { text: { type: "string", description: "One short sentence, e.g. 'No meetings before 10 AM' or 'Ahmed is head of sales'" } },
+      required: ["text"],
+    },
+  },
+  {
+    name: "forget",
+    description: "Delete a saved memory by its id, when the user says it is wrong or no longer true.",
+    parameters: { type: "object", properties: { id: { type: "string" } }, required: ["id"] },
   },
 ];
 
@@ -254,6 +271,18 @@ async function runTool(db: Db, uid: string, name: string, args: Args): Promise<T
       const { data, error } = await db.from("tasks").delete().eq("id", args.id).eq("user_id", uid).select("title").single();
       return { result: error ? { error: error.message } : { deleted: data.title }, changed: !error };
     }
+    case "remember": {
+      const text = String(args.text ?? "").trim().slice(0, 500);
+      if (!text) return { result: { error: "Empty memory." }, changed: false };
+      const { count } = await db.from("memories").select("id", { count: "exact", head: true }).eq("user_id", uid);
+      if ((count ?? 0) >= MAX_MEMORIES) return { result: { error: "Memory is full; ask the user which memory to forget." }, changed: false };
+      const { data, error } = await db.from("memories").insert({ user_id: uid, text }).select("id, text").single();
+      return { result: error ? { error: error.message } : data, changed: false };
+    }
+    case "forget": {
+      const { data, error } = await db.from("memories").delete().eq("id", args.id).eq("user_id", uid).select("text").single();
+      return { result: error ? { error: "Memory not found." } : { forgot: data.text }, changed: false };
+    }
     default:
       return { result: { error: `Unknown tool ${name}` }, changed: false };
   }
@@ -279,6 +308,11 @@ export async function runAgent(input: AgentInput): Promise<AgentOutput> {
   if (!GEMINI_KEY) return { error: "GEMINI_API_KEY is not set", status: 500, changed: false, actions: [] };
   const { db, uid, name, messages, today, now, lang, channel, extraTools = {} } = input;
 
+  // What the secretary already knows about this user, saved earlier with the remember tool.
+  const { data: memories } = await db.from("memories").select("id, text").eq("user_id", uid)
+    .order("created_at").limit(MAX_MEMORIES);
+  const known = (memories ?? []).map((m: { id: string; text: string }) => `- ${m.text} (id ${m.id})`).join("\n");
+
   const system = `You are FlowBase's personal secretary for ${name || "the user"}: an agent that plans and acts, not just a chatbot.
 Today is ${today}${now ? `, and the time now is ${now}` : ""} (the user's local date and time). Reply in ${lang === "ar" ? "Arabic (friendly Gulf style)" : "English"}, short and clear.
 ${channel ?? ""}
@@ -288,7 +322,7 @@ How you work:
 - If a tool returns an error, fix the arguments and try once more before telling the user.
 - Use the tools to read or change the user's data; never invent tasks or ids. Look up spaces and projects before choosing one.
 - Resolve words like "tomorrow" or "next Sunday" to real dates from today.
-- A single thing to do or remember: CALL create_task right away (one call per task).
+- A single thing to do or to be reminded of: CALL create_task right away (one call per task).
 - A bigger goal (a trip, an exam, a launch, "plan my week"...): think it through, then CALL create_project once with
   every step as a task spread over realistic dates up to the deadline, with subtasks where they help. No deadline given:
   pick a sensible one. Check the user's existing tasks on those days first so you do not overload a day.
@@ -299,7 +333,14 @@ How you work:
   was given, "8 at night" = 20:00, "8 in the morning" = 08:00, "in an hour" = now + 1 hour, rolling over to tomorrow after midnight).
 - Deleting is the exception: first tell the user exactly which task you would delete and ask "متأكد؟"; only after they say yes
   in a new message, call delete_task with confirmed=true. Never delete projects or spaces.
-- Do not say something was done unless the tool returned it. After acting, list exactly what you did (titles, dates, times).`;
+- Do not say something was done unless the tool returned it. After acting, list exactly what you did (titles, dates, times).
+- Memory: when the user tells you something that will still be true later (a preference like "no meetings before 10",
+  a habit, a person and their role), CALL remember with one short sentence, then say briefly that you will remember it.
+  Follow the memories below when you plan, pick times or answer. If the user says one is wrong, call forget (and
+  remember the corrected one). "What do you know about me" = list them. Never store passwords, card numbers or codes.
+
+What you remember about the user:
+${known || "(nothing yet)"}`;
 
   const tools = [{ functionDeclarations: [...baseTools, ...Object.values(extraTools).map((t) => t.declaration)] }];
 
