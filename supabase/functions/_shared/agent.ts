@@ -40,6 +40,7 @@ const taskFields = {
   priority,
   description: { type: "string" },
   subtasks: { type: "array", items: { type: "string" }, description: "Small checklist steps inside the task, optional" },
+  assignee: { type: "string", description: "Name of the team member who will do it, optional. Leave out for the user's own tasks." },
 };
 
 const baseTools = [
@@ -57,6 +58,7 @@ const baseTools = [
         from: { type: "string", description: "YYYY-MM-DD" },
         to: { type: "string", description: "YYYY-MM-DD" },
         project_id: { type: "string" },
+        assignee: { type: "string", description: "Only this team member's tasks, optional" },
         include_done: { type: "boolean" },
       },
       required: ["from", "to"],
@@ -119,6 +121,7 @@ const baseTools = [
         time: { type: "string", description: "HH:MM 24-hour" },
         priority,
         status: { type: "string", enum: ["todo", "inProgress", "done"] },
+        assignee: { type: "string", description: "Give the task to this team member; empty string takes it back" },
       },
       required: ["id"],
     },
@@ -130,6 +133,20 @@ const baseTools = [
       type: "object",
       properties: { id: { type: "string" }, confirmed: { type: "boolean" } },
       required: ["id", "confirmed"],
+    },
+  },
+  {
+    name: "list_team",
+    description: "List the user's team members with how many open and overdue tasks each one has. Use it for 'how is the team doing' or 'what is late with the team'.",
+    parameters: { type: "object", properties: {} },
+  },
+  {
+    name: "add_member",
+    description: "Add a person to the user's team (an employee they give tasks to).",
+    parameters: {
+      type: "object",
+      properties: { name: { type: "string" }, role: { type: "string", description: "Job title, optional" } },
+      required: ["name"],
     },
   },
   {
@@ -200,7 +217,7 @@ async function pickSpace(db: Db, uid: string, spaceId?: unknown): Promise<string
 }
 
 // One row for the tasks table, in the same shape the app saves.
-const taskRow = (t: Args, uid: string, spaceId: string, projectId: unknown) => ({
+const taskRow = (t: Args, uid: string, spaceId: string, projectId: unknown, assigneeId: string | null = null) => ({
   // The app always sends its own uuid, so don't rely on a column default.
   id: crypto.randomUUID(),
   user_id: uid,
@@ -212,9 +229,24 @@ const taskRow = (t: Args, uid: string, spaceId: string, projectId: unknown) => (
   priority: t.priority ?? "medium",
   description: t.description ?? "",
   status: "todo",
-  // A task with a time gets the phone reminder, like one added by hand.
-  reminder: !!t.time,
+  // A task with a time gets the phone reminder, like one added by hand. Not for a team member's task:
+  // the reminder would go to the manager, not to the person doing it.
+  reminder: !!t.time && !assigneeId,
+  assignee_id: assigneeId,
 });
+
+// The team member with this name (any letter case), added to the team if they are new.
+async function memberId(db: Db, uid: string, name: unknown): Promise<string | null> {
+  const n = String(name ?? "").trim().slice(0, 80);
+  if (!n) return null;
+  const { data } = await db.from("team_members").select("id").eq("user_id", uid).ilike("name", n).limit(1);
+  if (data?.[0]) return data[0].id;
+  const { data: added } = await db.from("team_members").insert({ user_id: uid, name: n }).select("id").single();
+  return added?.id ?? null;
+}
+
+// Tasks come back with the assignee's name instead of a bare id.
+const TASK_COLS = "id, title, date, time, priority, status, space_id, project_id, assignee:team_members(name), subtasks(title, done)";
 
 const subtaskRows = (uid: string, taskId: string, titles: unknown, start = 0) =>
   ((titles as string[] | undefined) ?? []).map((title, i) => ({
@@ -237,15 +269,20 @@ async function runTool(db: Db, uid: string, tz: string, name: string, args: Args
       // The model sometimes sends only one of the two dates; use it for both.
       const from = args.from ?? args.to, to = args.to ?? args.from;
       if (!from) return { result: { error: "Send from and to as YYYY-MM-DD." }, changed: false };
-      let q = db.from("tasks").select("id, title, date, time, priority, status, space_id, project_id, subtasks(title, done)")
+      let q = db.from("tasks").select(TASK_COLS)
         .eq("user_id", uid).gte("date", from).lte("date", to).order("date").limit(100);
       if (args.project_id) q = q.eq("project_id", args.project_id);
+      if (args.assignee) {
+        const { data: m } = await db.from("team_members").select("id").eq("user_id", uid).ilike("name", String(args.assignee).trim()).limit(1);
+        if (!m?.[0]) return { result: { error: `No team member called ${args.assignee}. Use list_team.` }, changed: false };
+        q = q.eq("assignee_id", m[0].id);
+      }
       if (!args.include_done) q = q.neq("status", "done");
       const { data, error } = await q;
       return { result: error ? { error: error.message } : data, changed: false };
     }
     case "search_tasks": {
-      let q = db.from("tasks").select("id, title, date, time, status, project_id")
+      let q = db.from("tasks").select("id, title, date, time, status, project_id, assignee:team_members(name)")
         .eq("user_id", uid).ilike("title", `%${args.query}%`).order("date").limit(20);
       if (!args.include_done) q = q.neq("status", "done");
       const { data, error } = await q;
@@ -255,8 +292,8 @@ async function runTool(db: Db, uid: string, tz: string, name: string, args: Args
       const spaceId = await pickSpace(db, uid, args.space_id);
       if (!spaceId) return { result: { error: "The user has no spaces yet." }, changed: false };
       const projectId = await owns(db, uid, "projects", args.project_id) ? args.project_id : null;
-      const row = taskRow(args, uid, spaceId, projectId);
-      const { data, error } = await db.from("tasks").insert(row).select("id, title, date, time").single();
+      const row = taskRow(args, uid, spaceId, projectId, await memberId(db, uid, args.assignee));
+      const { data, error } = await db.from("tasks").insert(row).select("id, title, date, time, assignee:team_members(name)").single();
       if (error) return { result: { error: error.message }, changed: false };
       const subs = subtaskRows(uid, row.id, args.subtasks);
       if (subs.length) await db.from("subtasks").insert(subs);
@@ -271,7 +308,8 @@ async function runTool(db: Db, uid: string, tz: string, name: string, args: Args
       });
       if (error) return { result: { error: error.message }, changed: false };
       const tasks = ((args.tasks as Args[]) ?? []).slice(0, 30);
-      const rows = tasks.map((t) => taskRow(t, uid, spaceId, projectId));
+      const rows = [];
+      for (const t of tasks) rows.push(taskRow(t, uid, spaceId, projectId, await memberId(db, uid, t.assignee)));
       if (rows.length) {
         const { error: e2 } = await db.from("tasks").insert(rows);
         if (e2) return { result: { project_id: projectId, error: e2.message }, changed: true };
@@ -293,14 +331,37 @@ async function runTool(db: Db, uid: string, tz: string, name: string, args: Args
     case "update_task": {
       const fields: Record<string, unknown> = {};
       for (const k of ["title", "date", "time", "priority", "status"]) if (args[k] !== undefined) fields[k] = args[k];
+      if (args.assignee !== undefined) {
+        fields.assignee_id = await memberId(db, uid, args.assignee);
+        if (fields.assignee_id) fields.reminder = false;
+      }
       const { data, error } = await db.from("tasks").update(fields).eq("id", args.id).eq("user_id", uid)
-        .select("id, title, date, time, status").single();
+        .select("id, title, date, time, status, assignee:team_members(name)").single();
       return { result: error ? { error: error.message } : data, changed: !error };
     }
     case "delete_task": {
       if (args.confirmed !== true) return { result: { error: "Ask the user to confirm first." }, changed: false };
       const { data, error } = await db.from("tasks").delete().eq("id", args.id).eq("user_id", uid).select("title").single();
       return { result: error ? { error: error.message } : { deleted: data.title }, changed: !error };
+    }
+    case "list_team": {
+      const { data: members } = await db.from("team_members").select("id, name, role").eq("user_id", uid).order("name");
+      const { data: open } = await db.from("tasks").select("assignee_id, date").eq("user_id", uid)
+        .not("assignee_id", "is", null).neq("status", "done");
+      const today = new Date().toLocaleDateString("en-CA", { timeZone: tz });
+      const team = (members ?? []).map((m: Args) => {
+        const mine = (open ?? []).filter((t: Args) => t.assignee_id === m.id);
+        return { name: m.name, role: m.role, open: mine.length, overdue: mine.filter((t: Args) => (t.date as string) < today).length };
+      });
+      return { result: team.length ? team : { note: "No team members yet." }, changed: false };
+    }
+    case "add_member": {
+      const name = String(args.name ?? "").trim().slice(0, 80);
+      if (!name) return { result: { error: "Send a name." }, changed: false };
+      const { data, error } = await db.from("team_members")
+        .upsert({ user_id: uid, name, role: String(args.role ?? "").slice(0, 80) }, { onConflict: "user_id,name" })
+        .select("name, role").single();
+      return { result: error ? { error: error.message } : { added: data }, changed: false };
     }
     case "remember": {
       const text = String(args.text ?? "").trim().slice(0, 500);
@@ -386,6 +447,9 @@ How you work:
 - Calendar: meetings and appointments live in Google Calendar (list_events, create_event); tasks are to-dos in
   FlowBase. "What do I have tomorrow" = check both. "Book / put a meeting" = create_event (after checking that day with
   list_events so nothing clashes, and following the memories). If a calendar tool says it is not linked, offer google_link.
+- Team: the user is a manager. "Give / assign X to Ahmed", "كلّف أحمد بـ..." = create_task with assignee (a new name is
+  added to the team on its own). "What is late with the team", "how is Ahmed doing" = list_team, then list_tasks with
+  assignee for details; name who is late and on what, and suggest one follow-up. Tasks without an assignee are the user's own.
 - Memory: when the user tells you something that will still be true later (a preference like "no meetings before 10",
   a habit, a person and their role), CALL remember with one short sentence, then say briefly that you will remember it.
   Follow the memories below when you plan, pick times or answer. If the user says one is wrong, call forget (and
